@@ -7,6 +7,7 @@ import com.imbananko.tilly.model.VoteValue.DOWN
 import com.imbananko.tilly.model.VoteValue.EXPLAIN
 import com.imbananko.tilly.model.VoteValue.UP
 import com.imbananko.tilly.repository.MemeRepository
+import com.imbananko.tilly.repository.VoteRedisRepository
 import com.imbananko.tilly.repository.VoteRepository
 import com.imbananko.tilly.similarity.MemeMatcher
 import com.imbananko.tilly.utility.extractVoteValue
@@ -35,7 +36,11 @@ import java.net.URL
 import javax.annotation.PostConstruct
 
 @Component
-class MemeManager(private val memeRepository: MemeRepository, private val voteRepository: VoteRepository, private val memeMatcher: MemeMatcher) : TelegramLongPollingBot() {
+class MemeManager(
+    private val memeRepository: MemeRepository,
+    private val voteRepository: VoteRepository,
+    private val voteRedisRepository: VoteRedisRepository,
+    private val memeMatcher: MemeMatcher) : TelegramLongPollingBot() {
 
   private val log = LoggerFactory.getLogger(javaClass)
 
@@ -142,6 +147,19 @@ class MemeManager(private val memeRepository: MemeRepository, private val voteRe
         .contains("EXPLAINED")
 
     val voteEntity = VoteEntity(targetChatId, messageId, voteSender.id, vote)
+
+    runCatching {
+      execute(
+          EditMessageReplyMarkup()
+              .setMessageId(messageId)
+              .setChatId(targetChatId)
+              .setInlineMessageId(update.callbackQuery.inlineMessageId)
+              .setReplyMarkup(createMarkup(voteRepository.cacheVote(voteEntity), true))
+      )
+    }
+        .onSuccess { log.info("Processed vote=$voteEntity") }
+        .onFailure { throwable -> log.error("Failed to process vote=" + voteEntity + ". Exception=" + throwable.message) }
+    return
 
     if (voteSender.userName == memeSenderFromCaption ||
         memeRepository.getMemeSender(targetChatId, messageId) == voteSender.id) return

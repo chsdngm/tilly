@@ -11,7 +11,7 @@ data class VoteEntity(
     val chatId: Long,
     val messageId: Int,
     val voterId: Int,
-    val voteValue: VoteValue
+    val value: VoteValue
 )
 
 enum class VoteValue(val emoji: String) {

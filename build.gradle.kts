@@ -21,6 +21,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jdbc:2.2.0.RELEASE")
     implementation("org.springframework.boot:spring-boot-configuration-processor")
     implementation("com.github.kilianB:JImageHash:3.0.0")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis:2.2.0.RELEASE")
+
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.5.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.5.2")
 }
