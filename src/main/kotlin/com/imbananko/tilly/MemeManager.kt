@@ -197,7 +197,6 @@ class MemeManager(private val memeRepository: MemeRepository,
   private fun processVote(update: Update) {
     val message = update.callbackQuery.message
     val targetChatId = message.chatId
-    val voteSender = update.callbackQuery.from
 
     val messageId = message.messageId
     val vote = update.extractVoteValue()
