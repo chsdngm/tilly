@@ -21,4 +21,5 @@ fun Update.canBeExplanation(): Boolean =
 fun Update.extractVoteValue(): VoteValue =
     VoteValue.valueOf(this.callbackQuery.data.split(" ".toRegex()).dropLastWhile { it.isEmpty() }[0])
 
-fun User.mention(): String = "[${userName ?: firstName ?: "мутный тип"}](tg://user?id=$id)"
+fun User.mention(): String =
+    "[${this.userName ?: this.firstName ?: "мутный тип"}](tg://user?id=${this.id})"

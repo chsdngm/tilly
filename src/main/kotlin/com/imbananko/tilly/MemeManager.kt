@@ -27,6 +27,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember
+import org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage
 import org.telegram.telegrambots.meta.api.methods.groupadministration.RestrictChatMember
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
@@ -77,6 +78,36 @@ class MemeManager(private val memeRepository: MemeRepository,
         }
   }
 
+  @Scheduled(cron = "0 0 19 * * WED")
+  private fun sendMemeOfTheWeek() {
+    runCatching {
+      val memeOfTheWeek: MemeEntity? = memeRepository.findMemeOfTheWeek(chatId)
+
+      if (memeOfTheWeek != null) {
+        val winner = execute(GetChatMember().apply {
+          this.setChatId(memeOfTheWeek.chatId)
+          this.setUserId(memeOfTheWeek.senderId)
+        }).user
+        val memeOfTheWeekMessage = execute(
+            SendMessage()
+                .setChatId(chatId)
+                .setParseMode(ParseMode.MARKDOWN)
+                .setReplyToMessageId(memeOfTheWeek.messageId)
+                .setText("Поздравляем ${winner.mention()} с мемом недели!")
+        )
+        execute(PinChatMessage(memeOfTheWeekMessage.chatId, memeOfTheWeekMessage.messageId))
+      } else {
+        execute(
+            SendMessage()
+                .setChatId(chatId)
+                .setText("К сожалению, мемов на этой неделе не было...")
+        )
+      }
+    }
+        .onSuccess { log.info("Successful send meme of the week") }
+        .onFailure { throwable -> log.error("Can't send meme of the week because of", throwable) }
+  }
+
   @Scheduled(fixedRate = 30 * 60 * 1000)
   private fun listenExpiredExplanations() {
     explanationRepository.listExpiredExplanations()
@@ -117,7 +148,9 @@ class MemeManager(private val memeRepository: MemeRepository,
     }
 
     val fileId = message.photo[0].fileId
-    val memeCaption = (message.caption?.trim()?.run { this + "\n\n" } ?: "") + "Sender: " + messageFrom.mention()
+    val mention = message.from.mention()
+
+    val memeCaption = (message.caption?.trim()?.run { this + "\n\n" } ?: "") + "Sender: " + mention
 
     val processMemeIfUnique = {
       runCatching {
@@ -144,7 +177,7 @@ class MemeManager(private val memeRepository: MemeRepository,
                 .setChatId(targetChatId)
                 .setPhoto(fileId)
                 .setParseMode(ParseMode.MARKDOWN)
-                .setCaption("${messageFrom.mention()} попытался отправить этот мем, не смотря на то, что его уже скидывали выше. Позор...")
+                .setCaption("$mention попытался отправить этот мем, не смотря на то, что его уже скидывали выше. Позор...")
                 .setReplyToMessageId(memeRepository.messageIdByFileId(existingMemeId, targetChatId))
         )
       }.onFailure { throwable: Throwable ->
@@ -168,6 +201,7 @@ class MemeManager(private val memeRepository: MemeRepository,
 
     val messageId = message.messageId
     val vote = update.extractVoteValue()
+    val voteSender = update.callbackQuery.from
 
     val wasExplained = message
         .replyMarkup
@@ -177,7 +211,7 @@ class MemeManager(private val memeRepository: MemeRepository,
 
     val voteEntity = VoteEntity(targetChatId, messageId, voteSender.id, vote)
 
-    val memeSenderId = memeRepository.getMemeSender(targetChatId, messageId)
+    val memeSenderId = memeRepository.getMemeSender(targetChatId, messageId);
     if (memeSenderId == voteSender.id) return
 
     if (voteRepository.exists(voteEntity)) voteRepository.delete(voteEntity)
@@ -201,8 +235,8 @@ class MemeManager(private val memeRepository: MemeRepository,
 
     if (shouldMarkExplained) {
 
-      val replyText = "[${update.callbackQuery.message.caption.replace("Sender: ", "")}](tg://user?id=$memeSenderId)" +
-          ", поясни за мем, на это у тебя есть сутки"
+      val memeSenderFromCaption = message.caption.split("Sender: ".toRegex()).dropLastWhile { it.isEmpty() }[1]
+      val replyText = "[$memeSenderFromCaption](tg://user?id=$memeSenderId), поясни за мем, на это у тебя есть сутки"
 
       runCatching {
         execute<Message, SendMessage>(
